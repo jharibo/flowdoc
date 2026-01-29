@@ -1,50 +1,34 @@
-// CRUD operations for product catalog management
-digraph "Product Inventory API" {
+// Flow derived from standalone function
+digraph "Function Flow" {
 	rankdir=TB
-	graph [fontsize=16 label="Product Inventory API" labelloc=t]
-	create_product [label="Create Product" fillcolor=lightblue shape=box style=filled]
-	validate_product_data [label="Validate Product Data" fillcolor=lightyellow shape=diamond style=filled]
-	check_duplicate_sku [label="Check Duplicate SKU" fillcolor=lightyellow shape=diamond style=filled]
-	persist_product [label="Persist Product" fillcolor=lightblue shape=box style=filled]
+	graph [fontsize=16 label="Function Flow" labelloc=t]
+	validate_product_data [label="Validate Product Data" fillcolor=lightgreen shape=ellipse style=filled]
+	check_duplicate_sku [label="Check Duplicate SKU" fillcolor=lightgreen shape=ellipse style=filled]
+	save_product [label="Save Product" fillcolor=lightblue shape=box style=filled]
 	notify_catalog_update [label="Notify Catalog Update" fillcolor=lightgreen shape=ellipse style=filled]
-	reject_invalid [label="Reject Invalid" fillcolor=lightgreen shape=ellipse style=filled]
-	reject_duplicate [label="Reject Duplicate" fillcolor=lightgreen shape=ellipse style=filled]
-	get_product [label="Get Product" fillcolor=lightblue shape=box style=filled]
-	lookup_product [label="Lookup Product" fillcolor=lightyellow shape=diamond style=filled]
-	check_product_visibility [label="Check Product Visibility" fillcolor=lightyellow shape=diamond style=filled]
-	format_product_response [label="Format Product Response" fillcolor=lightgreen shape=ellipse style=filled]
-	handle_not_found [label="Handle Not Found" fillcolor=lightgreen shape=ellipse style=filled]
-	update_product [label="Update Product" fillcolor=lightblue shape=box style=filled]
-	authorize_update [label="Authorize Update" fillcolor=lightyellow shape=diamond style=filled]
-	validate_update_fields [label="Validate Update Fields" fillcolor=lightyellow shape=diamond style=filled]
+	lookup_product [label="Lookup Product" fillcolor=lightgreen shape=ellipse style=filled]
 	apply_update [label="Apply Update" fillcolor=lightblue shape=box style=filled]
-	reject_unauthorized [label="Reject Unauthorized" fillcolor=lightgreen shape=ellipse style=filled]
-	reject_invalid_update [label="Reject Invalid Update" fillcolor=lightgreen shape=ellipse style=filled]
-	delete_product [label="Delete Product" fillcolor=lightblue shape=box style=filled]
-	check_order_references [label="Check Order References" fillcolor=lightyellow shape=diamond style=filled]
-	soft_delete_product [label="Soft Delete Product" fillcolor=lightblue shape=box style=filled]
-	hard_delete_product [label="Hard Delete Product" fillcolor=lightblue shape=box style=filled]
-	create_product -> validate_product_data
-	validate_product_data -> check_duplicate_sku [label=yes]
-	validate_product_data -> reject_invalid [label=no]
-	check_duplicate_sku -> reject_duplicate [label=yes]
-	check_duplicate_sku -> persist_product [label=no]
-	persist_product -> notify_catalog_update
-	get_product -> lookup_product
-	lookup_product -> check_product_visibility [label=yes]
-	lookup_product -> handle_not_found [label=no]
-	check_product_visibility -> format_product_response [label=yes]
-	check_product_visibility -> handle_not_found [label=no]
-	update_product -> authorize_update
-	authorize_update -> validate_update_fields [label=yes]
-	authorize_update -> reject_unauthorized [label=no]
-	validate_update_fields -> apply_update [label=yes]
-	validate_update_fields -> reject_invalid_update [label=no]
+	check_order_references [label="Check Order References" fillcolor=lightgreen shape=ellipse style=filled]
+	soft_delete [label="Soft Delete" fillcolor=lightblue shape=box style=filled]
+	hard_delete [label="Hard Delete" fillcolor=lightblue shape=box style=filled]
+	create_product [label="Create Product" fillcolor=lightyellow shape=diamond style=filled]
+	get_product [label="Get Product" fillcolor=lightblue shape=box style=filled]
+	update_product [label="Update Product" fillcolor=lightyellow shape=diamond style=filled]
+	delete_product [label="Delete Product" fillcolor=lightyellow shape=diamond style=filled]
+	save_product -> notify_catalog_update
 	apply_update -> notify_catalog_update
+	soft_delete -> notify_catalog_update
+	hard_delete -> notify_catalog_update
+	create_product -> validate_product_data
+	create_product -> check_duplicate_sku
+	create_product -> save_product
+	get_product -> lookup_product
+	update_product -> lookup_product
+	update_product -> validate_product_data
+	update_product -> apply_update
+	delete_product -> lookup_product
 	delete_product -> check_order_references
-	check_order_references -> soft_delete_product [label=yes]
-	check_order_references -> hard_delete_product [label=yes]
-	check_order_references -> soft_delete_product [label=no]
-	soft_delete_product -> notify_catalog_update
-	hard_delete_product -> notify_catalog_update
+	delete_product -> soft_delete [label=yes]
+	delete_product -> hard_delete [label=yes]
+	delete_product -> soft_delete [label=no]
 }

@@ -1,5 +1,10 @@
 # FlowDoc
 
+[![CI](https://github.com/jharibo/flowdoc/actions/workflows/ci.yml/badge.svg)](https://github.com/jharibo/flowdoc/actions/workflows/ci.yml)
+[![PyPI version](https://img.shields.io/pypi/v/flowdoc)](https://pypi.org/project/flowdoc/)
+[![Python versions](https://img.shields.io/pypi/pyversions/flowdoc)](https://pypi.org/project/flowdoc/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Generate business flow diagrams from Python code decorators.
 
 Unlike tools that trace technical execution paths, FlowDoc captures **business logic flow** -- the high-level process steps that describe what your application does from a business perspective. Annotate your code with lightweight decorators, and FlowDoc uses AST analysis to infer the flow graph and render it as a diagram.
@@ -156,6 +161,8 @@ async def create_order(order: OrderData):
     return await save_order(validated)
 ```
 
+See [examples/fastapi/app.py](examples/fastapi/app.py) for a complete CRUD API example with `@step` decorators on endpoints.
+
 ## ⚙️ How It Works
 
 FlowDoc uses Python's `ast` module to statically analyze decorated functions. For each `@step`, it walks the function body looking for:
@@ -174,6 +181,51 @@ These are intentional design constraints -- FlowDoc focuses on explicit, readabl
 - **Dynamic dispatch**: `getattr(self, name)()` is not traced -- use explicit method calls
 - **External object calls**: `processor.handle()` is not followed unless that object's methods are also decorated
 - **Indirect references**: Passing functions as arguments is not traced -- use explicit `if`/`else`
+
+## ❓ Troubleshooting
+
+### Graphviz not found
+
+FlowDoc requires the Graphviz system package for PNG/SVG/PDF output. Install it with:
+
+- **macOS**: `brew install graphviz`
+- **Ubuntu/Debian**: `sudo apt-get install graphviz`
+- **Windows**: Download from [graphviz.org](https://graphviz.org/download/)
+
+Mermaid and DOT formats do not require Graphviz.
+
+### No flows found
+
+Ensure your source file contains functions or methods decorated with `@step`. If using class-based flows, the class must also have the `@flow` decorator. FlowDoc only analyzes `@step` and `@flow` decorators -- it does not detect undecorated functions.
+
+### Dynamic decorator arguments
+
+FlowDoc only supports literal string arguments in decorators. This works:
+
+```python
+@step(name="Process Order")  # literal string
+```
+
+This does not:
+
+```python
+step_name = "Process Order"
+@step(name=step_name)  # variable -- not supported
+```
+
+Use literal strings in all decorator arguments for FlowDoc to detect them.
+
+### ImportError when running CLI
+
+If you see `ModuleNotFoundError: No module named 'flowdoc'` after installation:
+
+```bash
+# Ensure you're using the correct Python environment
+python -m flowdoc --version
+
+# Or reinstall in your active environment
+pip install --force-reinstall flowdoc
+```
 
 ## 🛠️ Development
 

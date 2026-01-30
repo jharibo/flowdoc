@@ -473,3 +473,101 @@ class TestEdgeCases:
         edges = flow.edges
         assert len(edges) == 1
         assert edges[0].to_step == "validate"
+
+    def test_namespaced_step_decorator(self, tmp_path: Path) -> None:
+        """Test @flowdoc.step namespaced decorator syntax."""
+        source = dedent("""
+            import flowdoc
+
+            @flowdoc.step(name="Process Order")
+            def process_order():
+                return validate()
+
+            @flowdoc.step(name="Validate")
+            def validate():
+                pass
+        """)
+
+        test_file = tmp_path / "namespaced_step.py"
+        test_file.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(test_file)
+
+        assert len(flows) == 1
+        flow = flows[0]
+        assert len(flow.steps) == 2
+        step_names = [s.name for s in flow.steps]
+        assert "Process Order" in step_names
+        assert "Validate" in step_names
+
+    def test_bare_step_decorator(self, tmp_path: Path) -> None:
+        """Test @step without parentheses (bare decorator)."""
+        source = dedent("""
+            from flowdoc import step
+
+            @step
+            def process():
+                return validate()
+
+            @step
+            def validate():
+                pass
+        """)
+
+        test_file = tmp_path / "bare_step.py"
+        test_file.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(test_file)
+
+        assert len(flows) == 1
+        flow = flows[0]
+        # Bare decorators should use function names
+        assert len(flow.steps) == 2
+
+    def test_namespaced_flow_decorator(self, tmp_path: Path) -> None:
+        """Test @flowdoc.flow namespaced decorator syntax."""
+        source = dedent("""
+            import flowdoc
+
+            @flowdoc.flow(name="Order Flow")
+            class OrderFlow:
+                @flowdoc.step(name="Process")
+                def process(self):
+                    pass
+        """)
+
+        test_file = tmp_path / "namespaced_flow.py"
+        test_file.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(test_file)
+
+        assert len(flows) == 1
+        flow = flows[0]
+        assert flow.name == "Order Flow"
+        assert len(flow.steps) == 1
+
+    def test_bare_flow_decorator(self, tmp_path: Path) -> None:
+        """Test @flow without parentheses (bare decorator)."""
+        source = dedent("""
+            from flowdoc import flow, step
+
+            @flow
+            class OrderFlow:
+                @step(name="Process")
+                def process(self):
+                    pass
+        """)
+
+        test_file = tmp_path / "bare_flow.py"
+        test_file.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(test_file)
+
+        assert len(flows) == 1
+        flow = flows[0]
+        # Bare flow decorator should use class name
+        assert flow.name == "OrderFlow"

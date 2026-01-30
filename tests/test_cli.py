@@ -130,6 +130,20 @@ class TestGenerateCommand:
         assert result.exit_code == 0
         assert "Generated:" in result.output
 
+    def test_generate_syntax_error(self, runner: CliRunner, tmp_path: Path) -> None:
+        """Test that syntax errors in source are reported gracefully."""
+        bad_file = tmp_path / "bad.py"
+        bad_file.write_text("def broken(:\n    pass\n")
+        result = runner.invoke(cli, ["generate", str(bad_file), "-f", "dot"])
+        assert result.exit_code != 0
+
+    def test_generate_empty_directory(self, runner: CliRunner, tmp_path: Path) -> None:
+        """Test generate on a directory with no Python files."""
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+        result = runner.invoke(cli, ["generate", str(empty_dir), "-f", "dot"])
+        assert result.exit_code != 0
+
 
 class TestValidateCommand:
     """Tests for the validate command."""
@@ -200,6 +214,13 @@ class TestValidateCommand:
         result = runner.invoke(cli, ["validate", str(empty_source)])
         assert result.exit_code != 0
         assert "No flows found" in result.output
+
+    def test_validate_syntax_error(self, runner: CliRunner, tmp_path: Path) -> None:
+        """Test that validate handles syntax errors gracefully."""
+        bad_file = tmp_path / "bad.py"
+        bad_file.write_text("def broken(:\n    pass\n")
+        result = runner.invoke(cli, ["validate", str(bad_file)])
+        assert result.exit_code != 0
 
 
 class TestCLIGeneral:

@@ -15,7 +15,7 @@ from flowdoc.models import Edge, FlowData, StepData
 from flowdoc.parser import FlowParser
 from flowdoc.validator import FlowValidator, ValidationMessage
 
-__version__ = "0.0.0"
+__version__ = "0.0.0-rc.1"
 __all__ = [
     "flow",
     "step",

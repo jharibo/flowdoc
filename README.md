@@ -4,7 +4,7 @@ Generate business flow diagrams from Python code decorators.
 
 Unlike tools that trace technical execution paths, FlowDoc captures **business logic flow** -- the high-level process steps that describe what your application does from a business perspective. Annotate your code with lightweight decorators, and FlowDoc uses AST analysis to infer the flow graph and render it as a diagram.
 
-## Features
+## ✨ Features
 
 - **Inference over declaration** -- annotate steps, and FlowDoc discovers connections by analyzing your code
 - **Pure AST analysis** -- no code execution, safe to run on untrusted code
@@ -13,7 +13,7 @@ Unlike tools that trace technical execution paths, FlowDoc captures **business l
 - **Built-in validation** -- detect dead steps, missing entry points, and other flow issues
 - **CLI included** -- generate diagrams and validate flows from the command line
 
-## Installation
+## 📦 Installation
 
 ```bash
 pip install flowdoc
@@ -21,7 +21,7 @@ pip install flowdoc
 
 FlowDoc requires Python 3.10+ and [Graphviz](https://graphviz.org/download/) installed on your system for PNG/SVG/PDF output.
 
-## Quick Start
+## 🚀 Quick Start
 
 Decorate your business logic with `@flow` and `@step`:
 
@@ -62,7 +62,7 @@ flowdoc generate order_processor.py
 
 FlowDoc analyzes the code, detects that `validate_payment` branches into two paths, and produces a flowchart with decision diamonds, regular steps, and terminal nodes.
 
-## Usage
+## 💻 Usage
 
 ### CLI
 
@@ -101,7 +101,7 @@ for flow_data in flows:
         print(f"[{msg.level}] {msg.message}")
 ```
 
-## Supported Patterns
+## 🔧 Supported Patterns
 
 ### Class-based flows
 
@@ -156,7 +156,7 @@ async def create_order(order: OrderData):
     return await save_order(validated)
 ```
 
-## How It Works
+## ⚙️ How It Works
 
 FlowDoc uses Python's `ast` module to statically analyze decorated functions. For each `@step`, it walks the function body looking for:
 
@@ -175,7 +175,7 @@ These are intentional design constraints -- FlowDoc focuses on explicit, readabl
 - **External object calls**: `processor.handle()` is not followed unless that object's methods are also decorated
 - **Indirect references**: Passing functions as arguments is not traced -- use explicit `if`/`else`
 
-## Development
+## 🛠️ Development
 
 ### Setup
 
@@ -233,7 +233,7 @@ flowdoc/
 └── LICENSE               # MIT
 ```
 
-## Contributing
+## 🤝 Contributing
 
 Contributions are welcome. To get started:
 
@@ -245,6 +245,6 @@ Contributions are welcome. To get started:
 
 Please keep decorators minimal, avoid executing user code, and treat validation as advisory (warnings, not errors).
 
-## License
+## 📄 License
 
 MIT -- see [LICENSE](LICENSE) for details.

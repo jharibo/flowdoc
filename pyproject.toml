@@ -1,9 +1,9 @@
 [project]
 name = "flowdoc"
-version = "0.1.0"
+version = "0.1.0a1"
 description = "Generate business flow diagrams from Python code decorators"
 authors = [
-    {name = "James Harrison", email = "james@example.com"}
+    {name = "James Harrison", email = "40500443+jharibo@users.noreply.github.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.10,<3.15"
@@ -22,11 +22,16 @@ classifiers = [
     "Topic :: Software Development :: Documentation",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-
 dependencies = [
     "graphviz>=0.20",
     "click>=8.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/jharibo/flowdoc"
+Homepage = "https://github.com/jharibo/flowdoc"
+Issues = "https://github.com/jharibo/flowdoc/issues"
+Documentation = "https://github.com/jharibo/flowdoc#readme"
 
 [dependency-groups]
 dev = [
@@ -34,6 +39,7 @@ dev = [
     "pytest-cov>=7.0.0,<8",
     "ruff>=0.14.0",
     "ty>=0.0.14",
+    "python-semantic-release>=9.0.0,<10",
 ]
 
 [project.scripts]
@@ -74,3 +80,22 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+version_variables = ["flowdoc/__init__.py:__version__"]
+branch = "main"
+commit_message = "chore(release): {version}"
+build_command = "uv build"
+tag_format = "v{version}"
+prerelease_token = "a"
+
+[tool.semantic_release.changelog]
+changelog_file = "CHANGELOG.md"
+
+[tool.semantic_release.remote]
+type = "github"
+token = { env = "GH_TOKEN" }
+
+[tool.semantic_release.publish]
+upload_to_vcs_release = true

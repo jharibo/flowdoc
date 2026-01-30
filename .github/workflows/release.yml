@@ -38,7 +38,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
       - name: Build package
-      run: uv build
+        run: uv build
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:

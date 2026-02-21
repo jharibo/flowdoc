@@ -11,3 +11,5 @@ build/
 *.swo
 .venv/
 .coverage
+*.dot
+*.mmd

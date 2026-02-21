@@ -14,6 +14,7 @@ class StepData:
     name: str
     function_name: str
     description: str = ""
+    docstring: str | None = None
     calls: list[Edge] = field(default_factory=list)
 
 

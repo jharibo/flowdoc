@@ -19,7 +19,7 @@ class DataImporter:
 
     @step(name="Transform Data", description="Apply business rules and normalize data")
     def transform_data(self, valid_data: list) -> list:
-        return self.load_to_database(valid_data)
+        return [self.load_to_database(valid_data)]
 
     @step(name="Load to Database", description="Insert transformed records into database")
     def load_to_database(self, transformed_data: list) -> dict:

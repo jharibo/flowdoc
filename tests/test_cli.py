@@ -254,3 +254,71 @@ class TestCLIGeneral:
         result = runner.invoke(cli, ["validate", "--help"])
         assert result.exit_code == 0
         assert "--strict" in result.output
+
+    def test_default_format_is_mermaid(self, runner: CliRunner) -> None:
+        """Test that default format is mermaid."""
+        result = runner.invoke(cli, ["generate", "--help"])
+        assert result.exit_code == 0
+        assert "default: mermaid" in result.output
+
+    def test_docstrings_flag_in_help(self, runner: CliRunner) -> None:
+        """Test --docstrings flag shows in help."""
+        result = runner.invoke(cli, ["generate", "--help"])
+        assert "--docstrings" in result.output
+
+
+class TestDocstringsFlag:
+    """Tests for --docstrings flag behavior."""
+
+    def test_docstrings_png_error(self, runner: CliRunner, sample_source: Path) -> None:
+        """--docstrings with PNG format raises error."""
+        result = runner.invoke(cli, ["generate", str(sample_source), "-f", "png", "--docstrings"])
+        assert result.exit_code != 0
+        assert "not supported with PNG" in result.output
+
+    def test_docstrings_pdf_error(self, runner: CliRunner, sample_source: Path) -> None:
+        """--docstrings with PDF format raises error."""
+        result = runner.invoke(cli, ["generate", str(sample_source), "-f", "pdf", "--docstrings"])
+        assert result.exit_code != 0
+        assert "not supported with PDF" in result.output
+
+    def test_docstrings_dot_succeeds(
+        self, runner: CliRunner, sample_source: Path, tmp_path: Path
+    ) -> None:
+        """--docstrings with DOT format succeeds."""
+        output_path = tmp_path / "output"
+        result = runner.invoke(
+            cli,
+            ["generate", str(sample_source), "-f", "dot", "-o", str(output_path), "--docstrings"],
+        )
+        assert result.exit_code == 0
+
+    def test_docstrings_svg_succeeds(
+        self, runner: CliRunner, sample_source: Path, tmp_path: Path
+    ) -> None:
+        """--docstrings with SVG format succeeds."""
+        output_path = tmp_path / "output"
+        result = runner.invoke(
+            cli,
+            ["generate", str(sample_source), "-f", "svg", "-o", str(output_path), "--docstrings"],
+        )
+        assert result.exit_code == 0
+
+    def test_docstrings_mermaid_succeeds(
+        self, runner: CliRunner, sample_source: Path, tmp_path: Path
+    ) -> None:
+        """--docstrings with Mermaid format succeeds."""
+        output_path = tmp_path / "output"
+        result = runner.invoke(
+            cli,
+            [
+                "generate",
+                str(sample_source),
+                "-f",
+                "mermaid",
+                "-o",
+                str(output_path),
+                "--docstrings",
+            ],
+        )
+        assert result.exit_code == 0

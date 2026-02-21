@@ -1,6 +1,6 @@
 [project]
 name = "flowdoc"
-version = "0.0.0-rc.1"
+version = "0.0.0-rc.2"
 description = "Generate business flow diagrams from Python code decorators"
 authors = [
     {name = "James Harrison", email = "40500443+jharibo@users.noreply.github.com"}

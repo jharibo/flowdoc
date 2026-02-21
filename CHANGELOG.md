@@ -1,6 +1,40 @@
 # CHANGELOG
 
 
+## v0.0.0-rc.2 (2026-02-21)
+
+### Documentation
+
+- Update documentation for cross-module discovery, optional graphviz, and docstring tooltips
+  ([`1d88661`](https://github.com/jharibo/flowdoc/commit/1d88661f9db4b64d2bf45f3a29f3b2f06cb68bc9))
+
+- Update README installation section: graphviz is now an optional extra - Update README features
+  list: add cross-module discovery and docstring tooltips - Update README CLI usage: default format
+  is now mermaid, add new flags - Update README programmatic API: add parse_directory() and
+  include_docstrings examples - Update README project structure: add discovery.py - Update README
+  troubleshooting: mention pip install flowdoc[graphviz] - Update CONTRIBUTING prerequisites:
+  graphviz is optional - Update examples README: mermaid is default, add docstrings example
+
+### Features
+
+- Add cross-module discovery, optional graphviz, and docstring tooltips
+  ([`71f135a`](https://github.com/jharibo/flowdoc/commit/71f135a3c60dd262e24caa0b499109c347f2f132))
+
+Cross-module flow discovery: - Add file discovery module with configurable exclusions - Add
+  StepRegistry for resolving steps across modules - Add two-pass parse_directory() for cross-module
+  flow analysis - Add --src-root and --exclude CLI options
+
+Optional Graphviz dependency: - Move graphviz to optional dependency extras - Lazy-import graphviz
+  only when needed (PNG/SVG/PDF) - Change default output format from PNG to Mermaid - Add html
+  format stub for future jinja2 support
+
+Docstring tooltips: - Extract docstrings from @step functions via AST - Add tooltip attribute in
+  Graphviz SVG/DOT output - Add docstring comments in Mermaid output - Add --docstrings CLI flag
+  with PNG/PDF validation
+
+130 tests passing, 96% coverage.
+
+
 ## v0.0.0-rc.1 (2026-01-30)
 
 ### Chores

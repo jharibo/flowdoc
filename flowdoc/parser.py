@@ -84,6 +84,65 @@ class FlowCallVisitor(ast.NodeVisitor):
         self.current_branch = old_branch
 
 
+class StepRegistry:
+    """Registry of steps across multiple modules for cross-reference resolution.
+
+    Used during multi-file parsing to track all discovered steps and resolve
+    calls between modules.
+    """
+
+    def __init__(self) -> None:
+        self._steps: dict[str, StepData] = {}  # qualified_name -> StepData
+        self._module_steps: dict[str, list[str]] = {}  # module_path -> [qualified_names]
+
+    def register(self, module_path: str, step: StepData) -> None:
+        """Register a step from a module.
+
+        :param module_path: Dotted module path (e.g. 'orders.processor')
+        :param step: Step data to register
+        """
+        qualified_name = f"{module_path}.{step.function_name}"
+        self._steps[qualified_name] = step
+        if module_path not in self._module_steps:
+            self._module_steps[module_path] = []
+        self._module_steps[module_path].append(qualified_name)
+
+    def resolve(self, from_module: str, call_name: str) -> StepData | None:
+        """Resolve a function call to a registered step.
+
+        Resolution order:
+        1. Direct qualified name lookup
+        2. Relative to calling module
+        3. Suffix match on function name
+
+        :param from_module: Module where the call originates
+        :param call_name: Name being called (simple or qualified)
+        :return: StepData if found, None otherwise
+        """
+        # Try direct qualified lookup
+        if call_name in self._steps:
+            return self._steps[call_name]
+
+        # Try relative to calling module
+        qualified = f"{from_module}.{call_name}"
+        if qualified in self._steps:
+            return self._steps[qualified]
+
+        # Try matching just the function name (for imports)
+        for qname, step in self._steps.items():
+            if qname.endswith(f".{call_name}"):
+                return step
+
+        return None
+
+    def all_steps(self) -> list[StepData]:
+        """Return all registered steps.
+
+        :return: List of all StepData objects in the registry
+        """
+        return list(self._steps.values())
+
+
 class FlowParser:
     """Parses Python files to extract flow metadata using pure AST analysis.
 
@@ -383,10 +442,13 @@ class FlowParser:
                 step_description = args.get("description", "")
                 break
 
+        docstring = ast.get_docstring(func_node)
+
         return StepData(
             name=step_name,
             function_name=func_node.name,
             description=step_description,
+            docstring=docstring,
         )
 
     @staticmethod
@@ -400,3 +462,119 @@ class FlowParser:
         visitor = FlowCallVisitor(decorated_steps)
         visitor.visit(function_node)
         return visitor.calls_to_steps
+
+    def parse_directory(
+        self,
+        root: Path | str,
+        src_root: Path | str | None = None,
+        exclude: set[str] | None = None,
+    ) -> list[FlowData]:
+        """Parse all Python files in a directory for flows.
+
+        Uses two-pass approach: first collects all steps into a registry,
+        then resolves cross-module references.
+
+        :param root: Directory to search
+        :param src_root: Root directory for import resolution (defaults to root)
+        :param exclude: Additional directory names to exclude
+        :return: List of FlowData objects with cross-module references resolved
+        """
+        from flowdoc.discovery import discover_python_files
+
+        root = Path(root)
+        if src_root:
+            src_root_path = Path(src_root)
+        elif root.is_file():
+            src_root_path = root.parent
+        else:
+            src_root_path = root
+
+        # Discover files
+        files = discover_python_files(root, exclude)
+
+        # First pass: collect all steps into registry
+        registry = StepRegistry()
+        file_asts: dict[Path, ast.Module] = {}
+
+        for file_path in files:
+            source = file_path.read_text(encoding="utf-8")
+            try:
+                tree = ast.parse(source, filename=str(file_path))
+            except SyntaxError as e:
+                warnings.warn(f"Cannot parse {file_path}: {e}", UserWarning, stacklevel=2)
+                continue
+            file_asts[file_path] = tree
+
+            module_path = self._path_to_module(file_path, src_root_path)
+            steps = self._collect_all_steps(tree)
+            for func_node in steps.values():
+                step_data = self._extract_step_metadata(func_node)
+                registry.register(module_path, step_data)
+
+        # Second pass: resolve cross-module references using per-file parsing
+        flows: list[FlowData] = []
+        for _file_path, tree in file_asts.items():
+            file_flows = self._parse_tree_with_registry(tree, registry)
+            flows.extend(file_flows)
+
+        return flows
+
+    @staticmethod
+    def _path_to_module(file_path: Path, src_root: Path) -> str:
+        """Convert a file path to a dotted module path.
+
+        :param file_path: Absolute path to Python file
+        :param src_root: Root directory for module resolution
+        :return: Dotted module path string
+        """
+        try:
+            relative = file_path.resolve().relative_to(src_root.resolve())
+        except ValueError:
+            relative = file_path
+
+        parts = list(relative.parts)
+        if parts[-1].endswith(".py"):
+            parts[-1] = parts[-1][:-3]
+        if parts[-1] == "__init__":
+            parts = parts[:-1]
+
+        return ".".join(parts)
+
+    def _parse_tree_with_registry(
+        self,
+        tree: ast.Module,
+        registry: StepRegistry,
+    ) -> list[FlowData]:
+        """Parse a single AST tree using a step registry for cross-module resolution.
+
+        Works like parse_file() but uses the registry's known steps for call detection.
+
+        :param tree: AST Module node
+        :param registry: StepRegistry with all known steps
+        :return: List of FlowData objects from this file
+        """
+        flows: list[FlowData] = []
+
+        # Collect steps from this file
+        local_steps = self._collect_all_steps(tree)
+
+        # Use union of local and registry steps for call detection
+        combined_steps: dict[str, ast.FunctionDef | None] = dict(local_steps)
+        for s in registry.all_steps():
+            if s.function_name not in combined_steps:
+                combined_steps[s.function_name] = None
+
+        # Extract class-based flows
+        for node in tree.body:
+            if isinstance(node, ast.ClassDef):
+                flow_data = self._extract_class_flow(node, combined_steps, tree)
+                if flow_data:
+                    flows.append(flow_data)
+
+        # Extract function-based flow
+        function_steps = self._extract_function_steps(tree, local_steps)
+        if function_steps:
+            flow_data = self._create_function_flow(function_steps, combined_steps, tree)
+            flows.append(flow_data)
+
+        return flows

@@ -9,8 +9,6 @@ import re
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from graphviz import Digraph
-
 from flowdoc.models import Edge, FlowData, StepData
 
 
@@ -79,16 +77,19 @@ class GraphvizGenerator(DiagramGenerator):
         self,
         output_format: str = "png",
         direction: str = "TB",
+        include_docstrings: bool = False,
         **kwargs: str,
     ) -> None:
         """Initialize Graphviz generator.
 
         :param output_format: Output format ('png', 'svg', 'pdf', 'dot')
         :param direction: Layout direction ('TB' or 'LR')
+        :param include_docstrings: Whether to include docstrings as tooltips
         :param kwargs: Additional keyword arguments (ignored)
         """
         self.output_format = output_format
         self.direction = direction
+        self.include_docstrings = include_docstrings
 
     def generate(self, flow_data: FlowData, output_path: Path) -> Path:
         """Generate a Graphviz diagram.
@@ -111,12 +112,14 @@ class GraphvizGenerator(DiagramGenerator):
         dot.render(filename=stem, format=self.output_format, cleanup=True)
         return Path(f"{stem}.{self.output_format}")
 
-    def _create_graph(self, flow_data: FlowData) -> Digraph:
+    def _create_graph(self, flow_data: FlowData) -> object:
         """Create a Graphviz Digraph from flow data.
 
         :param flow_data: The flow data to render
         :return: Configured Digraph object
         """
+        from graphviz import Digraph
+
         dot = Digraph(
             name=flow_data.name,
             comment=flow_data.description or flow_data.name,
@@ -129,7 +132,7 @@ class GraphvizGenerator(DiagramGenerator):
 
         return dot
 
-    def _add_nodes(self, dot: Digraph, flow_data: FlowData) -> None:
+    def _add_nodes(self, dot: object, flow_data: FlowData) -> None:
         """Add styled nodes to the graph.
 
         :param dot: Graphviz Digraph to add nodes to
@@ -137,10 +140,12 @@ class GraphvizGenerator(DiagramGenerator):
         """
         for step in flow_data.steps:
             classification = self._classify_step(step, flow_data.edges)
-            style = self.NODE_STYLES[classification]
+            style = dict(self.NODE_STYLES[classification])
+            if self.include_docstrings and step.docstring:
+                style["tooltip"] = step.docstring
             dot.node(step.function_name, label=step.name, **style)
 
-    def _add_edges(self, dot: Digraph, edges: list[Edge]) -> None:
+    def _add_edges(self, dot: object, edges: list[Edge]) -> None:
         """Add edges to the graph.
 
         :param dot: Graphviz Digraph to add edges to
@@ -165,14 +170,21 @@ class MermaidGenerator(DiagramGenerator):
     # Mermaid keywords that conflict with node IDs
     RESERVED_WORDS = frozenset({"end", "graph", "subgraph", "direction", "click", "style", "class"})
 
-    def __init__(self, direction: str = "TD", **kwargs: str) -> None:
+    def __init__(
+        self,
+        direction: str = "TD",
+        include_docstrings: bool = False,
+        **kwargs: str,
+    ) -> None:
         """Initialize Mermaid generator.
 
         :param direction: Flowchart direction ('TD' or 'LR')
+        :param include_docstrings: Whether to include docstrings as comments
         :param kwargs: Additional keyword arguments (ignored)
         """
         # Map TB to TD for Mermaid compatibility
         self.direction = "TD" if direction == "TB" else direction
+        self.include_docstrings = include_docstrings
 
     def generate(self, flow_data: FlowData, output_path: Path) -> Path:
         """Generate a Mermaid diagram file.
@@ -201,6 +213,9 @@ class MermaidGenerator(DiagramGenerator):
             label = self._escape_label(step.name)
             node_def = self._node_shape(node_id, label, classification)
             lines.append(f"    {node_def}")
+            if self.include_docstrings and step.docstring:
+                for doc_line in step.docstring.splitlines():
+                    lines.append(f"    %% {doc_line}")
 
         # Blank line between nodes and edges
         if flow_data.edges:
@@ -258,16 +273,39 @@ class MermaidGenerator(DiagramGenerator):
         return label
 
 
-def create_generator(output_format: str, **kwargs: str) -> DiagramGenerator:
+def create_generator(output_format: str, **kwargs: object) -> DiagramGenerator:
     """Factory function to create a diagram generator.
 
-    :param output_format: One of 'png', 'svg', 'pdf', 'dot', 'mermaid'
+    :param output_format: One of 'png', 'svg', 'pdf', 'dot', 'mermaid', 'html'
     :param kwargs: Additional arguments passed to the generator constructor
     :return: Appropriate DiagramGenerator instance
     :raises ValueError: If format is not supported
+    :raises ImportError: If required optional dependency is not installed
     """
-    if output_format in ("png", "svg", "pdf", "dot"):
-        return GraphvizGenerator(output_format=output_format, **kwargs)
     if output_format == "mermaid":
         return MermaidGenerator(**kwargs)
-    raise ValueError(f"Unsupported format: {output_format}. Supported: png, svg, pdf, dot, mermaid")
+    if output_format == "dot":
+        return GraphvizGenerator(output_format=output_format, **kwargs)
+    if output_format in ("png", "svg", "pdf"):
+        try:
+            import graphviz  # noqa: F401
+        except ImportError:
+            raise ImportError(
+                f"{output_format.upper()} output requires the 'graphviz' extra. Install with:\n"
+                "    pip install flowdoc[graphviz]\n\n"
+                "Alternatively, use --format mermaid or --format dot which have no additional "
+                "dependencies."
+            ) from None
+        return GraphvizGenerator(output_format=output_format, **kwargs)
+    if output_format == "html":
+        try:
+            import jinja2  # noqa: F401
+        except ImportError:
+            raise ImportError(
+                "HTML output requires the 'html' extra. Install with:\n"
+                "    pip install flowdoc[html]"
+            ) from None
+        raise NotImplementedError("HTML generator not yet implemented")
+    raise ValueError(
+        f"Unsupported format: {output_format}. Supported: png, svg, pdf, dot, mermaid, html"
+    )

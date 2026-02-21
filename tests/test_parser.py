@@ -4,8 +4,8 @@ from pathlib import Path
 from textwrap import dedent
 
 from flowdoc.decorators import clear_flow_registry
-from flowdoc.models import Edge
-from flowdoc.parser import FlowParser
+from flowdoc.models import Edge, StepData
+from flowdoc.parser import FlowParser, StepRegistry
 
 
 class TestClassBasedFlowParsing:
@@ -571,3 +571,202 @@ class TestEdgeCases:
         flow = flows[0]
         # Bare flow decorator should use class name
         assert flow.name == "OrderFlow"
+
+
+class TestStepRegistry:
+    """Tests for StepRegistry."""
+
+    def test_register_and_resolve_qualified(self) -> None:
+        """Steps can be resolved by qualified name."""
+        registry = StepRegistry()
+        step = StepData(name="Validate", function_name="validate", description="")
+        registry.register("orders.validation", step)
+
+        result = registry.resolve("some.module", "orders.validation.validate")
+        assert result is not None
+        assert result.name == "Validate"
+
+    def test_resolve_relative_to_module(self) -> None:
+        """Steps can be resolved relative to calling module."""
+        registry = StepRegistry()
+        step = StepData(name="Validate", function_name="validate", description="")
+        registry.register("orders.validation", step)
+
+        result = registry.resolve("orders.validation", "validate")
+        assert result is not None
+        assert result.name == "Validate"
+
+    def test_resolve_by_function_name(self) -> None:
+        """Steps can be resolved by bare function name (suffix match)."""
+        registry = StepRegistry()
+        step = StepData(name="Check Inventory", function_name="check_inventory", description="")
+        registry.register("orders.validation", step)
+
+        result = registry.resolve("orders.processor", "check_inventory")
+        assert result is not None
+        assert result.name == "Check Inventory"
+
+    def test_resolve_returns_none_for_unknown(self) -> None:
+        """Unknown calls return None."""
+        registry = StepRegistry()
+        result = registry.resolve("some.module", "unknown_function")
+        assert result is None
+
+    def test_all_steps(self) -> None:
+        """all_steps() returns all registered steps."""
+        registry = StepRegistry()
+        step1 = StepData(name="Step A", function_name="step_a", description="")
+        step2 = StepData(name="Step B", function_name="step_b", description="")
+        registry.register("mod1", step1)
+        registry.register("mod2", step2)
+
+        steps = registry.all_steps()
+        assert len(steps) == 2
+        names = {s.name for s in steps}
+        assert names == {"Step A", "Step B"}
+
+
+class TestPathToModule:
+    """Tests for _path_to_module()."""
+
+    def test_simple_file(self, tmp_path: Path) -> None:
+        """Convert simple .py file to module name."""
+        parser = FlowParser()
+        result = parser._path_to_module(tmp_path / "orders.py", tmp_path)
+        assert result == "orders"
+
+    def test_nested_file(self, tmp_path: Path) -> None:
+        """Convert nested file to dotted path."""
+        parser = FlowParser()
+        result = parser._path_to_module(tmp_path / "pkg" / "sub" / "module.py", tmp_path)
+        assert result == "pkg.sub.module"
+
+    def test_init_file(self, tmp_path: Path) -> None:
+        """__init__.py converts to package name."""
+        parser = FlowParser()
+        result = parser._path_to_module(tmp_path / "pkg" / "__init__.py", tmp_path)
+        assert result == "pkg"
+
+
+class TestParseDirectory:
+    """Tests for parse_directory()."""
+
+    def test_parse_directory_finds_flows(self) -> None:
+        """parse_directory discovers flows in fixture directory."""
+        fixtures_dir = Path(__file__).parent / "fixtures" / "cross_module"
+        parser = FlowParser()
+        flows = parser.parse_directory(fixtures_dir)
+
+        assert len(flows) > 0
+        flow_names = [f.name for f in flows]
+        assert "Order Processing" in flow_names
+
+    def test_parse_directory_single_file(self, tmp_path: Path) -> None:
+        """parse_directory works with a single file."""
+        source = dedent("""
+            from flowdoc import flow, step
+
+            @flow(name="Test Flow")
+            class TestFlow:
+                @step(name="Start")
+                def start(self):
+                    pass
+        """)
+        file_path = tmp_path / "flow.py"
+        file_path.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_directory(file_path)
+        assert len(flows) == 1
+        assert flows[0].name == "Test Flow"
+
+    def test_unresolved_calls_ignored(self, tmp_path: Path) -> None:
+        """Calls to non-step functions don't create edges."""
+        source = dedent("""
+            from flowdoc import step
+
+            @step(name="Start")
+            def start():
+                helper_function()
+                return end()
+
+            @step(name="End")
+            def end():
+                pass
+
+            def helper_function():
+                pass
+        """)
+        file_path = tmp_path / "flow.py"
+        file_path.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_directory(file_path)
+        assert len(flows) == 1
+        edge_targets = [e.to_step for e in flows[0].edges]
+        assert "end" in edge_targets
+        assert "helper_function" not in edge_targets
+
+
+class TestDocstringExtraction:
+    """Tests for docstring extraction."""
+
+    def setup_method(self) -> None:
+        clear_flow_registry()
+
+    def test_docstring_extraction(self, tmp_path: Path) -> None:
+        """Docstrings are extracted from decorated functions."""
+        source = dedent("""
+            from flowdoc import step
+
+            @step(name="Process")
+            def process():
+                \"\"\"Process the incoming data.\"\"\"
+                pass
+        """)
+        file_path = tmp_path / "flow.py"
+        file_path.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(file_path)
+        assert flows[0].steps[0].docstring == "Process the incoming data."
+
+    def test_docstring_none_when_missing(self, tmp_path: Path) -> None:
+        """Docstring is None when function has no docstring."""
+        source = dedent("""
+            from flowdoc import step
+
+            @step(name="Process")
+            def process():
+                pass
+        """)
+        file_path = tmp_path / "flow.py"
+        file_path.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(file_path)
+        assert flows[0].steps[0].docstring is None
+
+    def test_docstring_multiline(self, tmp_path: Path) -> None:
+        """Multiline docstrings are extracted correctly."""
+        source = dedent("""
+            from flowdoc import step
+
+            @step(name="Process")
+            def process():
+                \"\"\"Process the incoming data.
+
+                This step handles all incoming data
+                and validates it before processing.
+                \"\"\"
+                pass
+        """)
+        file_path = tmp_path / "flow.py"
+        file_path.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(file_path)
+        docstring = flows[0].steps[0].docstring
+        assert docstring is not None
+        assert "Process the incoming data." in docstring
+        assert "validates it before processing." in docstring

@@ -297,3 +297,63 @@ class TestStepClassification:
         step = StepData(name="Process", function_name="process", description="")
         edges = [Edge(from_step="process", to_step="next")]
         assert DiagramGenerator._classify_step(step, edges) == "regular"
+
+
+class TestDocstringTooltips:
+    """Tests for docstring tooltip support in generators."""
+
+    def _make_flow_with_docstring(self) -> FlowData:
+        """Create a simple flow where steps have docstrings."""
+        return FlowData(
+            name="Tooltip Flow",
+            type="function",
+            description="Test flow",
+            steps=[
+                StepData(
+                    name="Start",
+                    function_name="start",
+                    description="",
+                    docstring="Begin the process.",
+                ),
+                StepData(
+                    name="End",
+                    function_name="end",
+                    description="",
+                    docstring=None,
+                ),
+            ],
+            edges=[Edge(from_step="start", to_step="end")],
+        )
+
+    def test_dot_tooltip_with_docstring(self, tmp_path: Path) -> None:
+        """DOT output includes tooltip attribute when docstrings enabled."""
+        flow = self._make_flow_with_docstring()
+        gen = GraphvizGenerator(output_format="dot", include_docstrings=True)
+        result = gen.generate(flow, tmp_path / "output")
+        content = result.read_text()
+        assert "tooltip" in content
+        assert "Begin the process." in content
+
+    def test_dot_no_tooltip_without_flag(self, tmp_path: Path) -> None:
+        """DOT output omits tooltip when docstrings not enabled."""
+        flow = self._make_flow_with_docstring()
+        gen = GraphvizGenerator(output_format="dot", include_docstrings=False)
+        result = gen.generate(flow, tmp_path / "output")
+        content = result.read_text()
+        assert "tooltip" not in content
+
+    def test_mermaid_docstring_comments(self, tmp_path: Path) -> None:
+        """Mermaid output includes docstrings as comments."""
+        flow = self._make_flow_with_docstring()
+        gen = MermaidGenerator(include_docstrings=True)
+        result = gen.generate(flow, tmp_path / "output")
+        content = result.read_text()
+        assert "%% Begin the process." in content
+
+    def test_mermaid_no_comments_without_flag(self, tmp_path: Path) -> None:
+        """Mermaid output omits docstring comments when not enabled."""
+        flow = self._make_flow_with_docstring()
+        gen = MermaidGenerator(include_docstrings=False)
+        result = gen.generate(flow, tmp_path / "output")
+        content = result.read_text()
+        assert "%%" not in content

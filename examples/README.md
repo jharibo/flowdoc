@@ -13,16 +13,10 @@ This directory contains examples demonstrating different FlowDoc patterns and us
 
 ## Generating Diagrams
 
-### PNG (default)
+### Mermaid Markdown (default)
 
 ```bash
 flowdoc generate examples/ecommerce_order.py
-```
-
-### Mermaid Markdown
-
-```bash
-flowdoc generate examples/ecommerce_order.py --format mermaid
 ```
 
 ### SVG
@@ -31,10 +25,22 @@ flowdoc generate examples/ecommerce_order.py --format mermaid
 flowdoc generate examples/ecommerce_order.py --format svg
 ```
 
+### PNG (requires `pip install flowdoc[graphviz]`)
+
+```bash
+flowdoc generate examples/ecommerce_order.py --format png
+```
+
 ### DOT (Graphviz source)
 
 ```bash
 flowdoc generate examples/ecommerce_order.py --format dot
+```
+
+### With docstring tooltips
+
+```bash
+flowdoc generate examples/ecommerce_order.py --format svg --docstrings
 ```
 
 ## Validating Flows

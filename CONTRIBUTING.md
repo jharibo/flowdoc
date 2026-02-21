@@ -8,7 +8,7 @@ Thank you for considering contributing to FlowDoc! This document provides guidel
 
 - Python 3.10 or higher
 - [uv](https://docs.astral.sh/uv/) package manager
-- [Graphviz](https://graphviz.org/download/) (for diagram generation)
+- [Graphviz](https://graphviz.org/download/) (optional, for PNG/SVG/PDF output -- Mermaid and DOT work without it)
 
 ### Installation
 

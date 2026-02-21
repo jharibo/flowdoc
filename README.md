@@ -13,7 +13,9 @@ Unlike tools that trace technical execution paths, FlowDoc captures **business l
 
 - **Inference over declaration** -- annotate steps, and FlowDoc discovers connections by analyzing your code
 - **Pure AST analysis** -- no code execution, safe to run on untrusted code
-- **Multiple output formats** -- PNG, SVG, PDF, DOT (via Graphviz), and Mermaid markdown
+- **Cross-module discovery** -- analyze flows spanning multiple files with automatic file discovery
+- **Multiple output formats** -- Mermaid markdown (default), PNG, SVG, PDF, DOT (Graphviz formats require optional `graphviz` extra)
+- **Docstring tooltips** -- include `@step` docstrings as tooltips in SVG/DOT/Mermaid output
 - **Flexible patterns** -- class-based flows, standalone functions, async/await, and web frameworks (FastAPI, Flask)
 - **Built-in validation** -- detect dead steps, missing entry points, and other flow issues
 - **CLI included** -- generate diagrams and validate flows from the command line
@@ -24,7 +26,13 @@ Unlike tools that trace technical execution paths, FlowDoc captures **business l
 pip install flowdoc
 ```
 
-FlowDoc requires Python 3.10+ and [Graphviz](https://graphviz.org/download/) installed on your system for PNG/SVG/PDF output.
+FlowDoc requires Python 3.10+. The base install supports Mermaid and DOT output with no extra dependencies.
+
+For PNG, SVG, and PDF output, install the Graphviz extra and the [Graphviz system package](https://graphviz.org/download/):
+
+```bash
+pip install flowdoc[graphviz]
+```
 
 ## 🚀 Quick Start
 
@@ -72,13 +80,22 @@ FlowDoc analyzes the code, detects that `validate_payment` branches into two pat
 ### CLI
 
 ```bash
-# Generate a PNG diagram (default)
+# Generate a Mermaid diagram (default)
 flowdoc generate mymodule.py
 
 # Choose output format
 flowdoc generate mymodule.py --format svg
-flowdoc generate mymodule.py --format mermaid
+flowdoc generate mymodule.py --format png
 flowdoc generate mymodule.py --format dot
+
+# Generate from a directory (cross-module discovery)
+flowdoc generate src/
+
+# Include docstrings as tooltips (SVG, DOT, Mermaid only)
+flowdoc generate mymodule.py --format svg --docstrings
+
+# Exclude directories during discovery
+flowdoc generate src/ --exclude migrations --exclude scripts
 
 # Validate a flow for issues
 flowdoc validate mymodule.py
@@ -89,14 +106,22 @@ flowdoc validate mymodule.py
 ```python
 from flowdoc import FlowParser, create_generator, FlowValidator
 
-# Parse a source file
+# Parse a single file
 parser = FlowParser()
 flows = parser.parse_file("mymodule.py")
 
+# Or parse a directory (cross-module discovery)
+flows = parser.parse_directory("src/")
+
 # Generate a diagram
-generator = create_generator("png")
+generator = create_generator("mermaid")
 for flow_data in flows:
-    generator.generate(flow_data, "output.png")
+    generator.generate(flow_data, "output")
+
+# Generate with docstring tooltips
+generator = create_generator("svg", include_docstrings=True)
+for flow_data in flows:
+    generator.generate(flow_data, "output")
 
 # Validate
 validator = FlowValidator()
@@ -186,7 +211,15 @@ These are intentional design constraints -- FlowDoc focuses on explicit, readabl
 
 ### Graphviz not found
 
-FlowDoc requires the Graphviz system package for PNG/SVG/PDF output. Install it with:
+PNG, SVG, and PDF output requires both the Python `graphviz` package and the Graphviz system package.
+
+Install the Python extra:
+
+```bash
+pip install flowdoc[graphviz]
+```
+
+Install the system package:
 
 - **macOS**: `brew install graphviz`
 - **Ubuntu/Debian**: `sudo apt-get install graphviz`
@@ -275,6 +308,7 @@ flowdoc/
 ├── flowdoc/
 │   ├── __init__.py       # Public API exports
 │   ├── decorators.py     # @flow and @step decorators
+│   ├── discovery.py      # Cross-module file discovery
 │   ├── parser.py         # AST analysis and flow extraction
 │   ├── generator.py      # Graphviz and Mermaid diagram generators
 │   ├── validator.py      # Flow validation logic

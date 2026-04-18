@@ -47,7 +47,7 @@ dev = [
     "pytest-cov>=7.0.0,<8",
     "ruff>=0.14.0",
     "ty>=0.0.14",
-    "python-semantic-release>=9.0.0,<10",
+    "python-semantic-release>=10.5.3,<11",
 ]
 examples = [
     "fastapi>=0.129.0,<1"

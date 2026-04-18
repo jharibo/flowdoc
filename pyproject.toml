@@ -100,6 +100,7 @@ commit_message = "chore(release): {version}"
 build_command = "uv build"
 tag_format = "v{version}"
 prerelease_token = "a"
+allow_zero_version = true
 
 [tool.semantic_release.changelog]
 changelog_file = "CHANGELOG.md"

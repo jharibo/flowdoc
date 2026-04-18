@@ -1,6 +1,7 @@
 # FlowDoc
 
 [![CI](https://github.com/jharibo/flowdoc/actions/workflows/ci.yml/badge.svg)](https://github.com/jharibo/flowdoc/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/jharibo/flowdoc/graph/badge.svg)](https://codecov.io/gh/jharibo/flowdoc)
 [![PyPI version](https://img.shields.io/pypi/v/flowdoc)](https://pypi.org/project/flowdoc/)
 [![Python versions](https://img.shields.io/pypi/pyversions/flowdoc)](https://pypi.org/project/flowdoc/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

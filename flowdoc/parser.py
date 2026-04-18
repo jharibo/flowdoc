@@ -83,6 +83,56 @@ class FlowCallVisitor(ast.NodeVisitor):
 
         self.current_branch = old_branch
 
+    def visit_Try(self, node: ast.Try) -> None:
+        """Visit Try nodes to track try/except/finally branching.
+
+        :param node: AST Try node to analyze
+        """
+        old_branch = self.current_branch
+
+        # Visit the try body
+        self.current_branch = "try"
+        for child in node.body:
+            self.visit(child)
+
+        # Visit each except handler with its own typed label
+        for handler in node.handlers:
+            self.current_branch = self._format_except_label(handler)
+            for child in handler.body:
+                self.visit(child)
+
+        # Visit finally block if present
+        if node.finalbody:
+            self.current_branch = "finally"
+            for child in node.finalbody:
+                self.visit(child)
+
+        self.current_branch = old_branch
+
+    @staticmethod
+    def _format_except_label(handler: ast.ExceptHandler) -> str:
+        """Format an ExceptHandler into a branch label.
+
+        :param handler: AST ExceptHandler node
+        :return: Branch label like "except", "except ValueError", "except A | B"
+        """
+        if handler.type is None:
+            return "except"
+
+        def name_of(expr: ast.expr) -> str | None:
+            if isinstance(expr, ast.Name):
+                return expr.id
+            if isinstance(expr, ast.Attribute):
+                return expr.attr
+            return None
+
+        if isinstance(handler.type, ast.Tuple):
+            names = [n for n in (name_of(elt) for elt in handler.type.elts) if n]
+            return "except " + " | ".join(names) if names else "except"
+
+        single = name_of(handler.type)
+        return f"except {single}" if single else "except"
+
 
 class StepRegistry:
     """Registry of steps across multiple modules for cross-reference resolution.
@@ -181,7 +231,15 @@ class FlowParser:
                 if flow_data:
                     flows.append(flow_data)
 
-        # Third pass: extract function-based flow (standalone @step functions)
+        # Third pass: extract @flow decorated factory functions
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if self._has_flow_decorator(node):
+                    flow_data = self._extract_factory_flow(node, all_steps)
+                    if flow_data:
+                        flows.append(flow_data)
+
+        # Fourth pass: extract function-based flow (standalone @step functions)
         function_steps = self._extract_function_steps(tree, all_steps)
         if function_steps:
             # Create an implicit flow from standalone functions
@@ -359,6 +417,61 @@ class FlowParser:
 
         return FlowData(
             name=flow_name, type="class", steps=steps, edges=edges, description=flow_description
+        )
+
+    def _extract_factory_flow(
+        self,
+        func_node: ast.FunctionDef | ast.AsyncFunctionDef,
+        all_steps: dict[str, ast.FunctionDef],
+    ) -> FlowData | None:
+        """Extract flow metadata from a @flow decorated factory function.
+
+        The factory's body is walked to find nested @step inner functions, which
+        together form the flow. Common for FastAPI/Flask app-factory patterns.
+
+        :param func_node: Function definition AST node with @flow decorator
+        :param all_steps: All available @step functions/methods (for call resolution)
+        :return: FlowData or None if not a @flow factory
+        """
+        if not self._has_flow_decorator(func_node):
+            return None
+
+        flow_name = func_node.name
+        flow_description = ""
+        for decorator in func_node.decorator_list:
+            if self._is_flow_decorator(decorator):
+                args = self._extract_decorator_args(decorator)
+                flow_name = args.get("name", func_node.name)
+                flow_description = args.get("description", "")
+                break
+
+        # Collect @step decorated functions nested inside this factory
+        nested_steps: dict[str, ast.FunctionDef | ast.AsyncFunctionDef] = {}
+        for node in ast.walk(func_node):
+            if node is func_node:
+                continue
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if self._has_step_decorator(node):
+                    nested_steps[node.name] = node
+
+        steps: list[StepData] = []
+        edges: list[Edge] = []
+        callable_steps = set(all_steps.keys())
+
+        for step_name, step_node in nested_steps.items():
+            step_data = self._extract_step_metadata(step_node)
+            connections = self._find_step_calls(step_node, callable_steps)
+            step_data.calls = connections
+            for call in connections:
+                edges.append(Edge(from_step=step_name, to_step=call.to_step, branch=call.branch))
+            steps.append(step_data)
+
+        return FlowData(
+            name=flow_name,
+            type="function",
+            steps=steps,
+            edges=edges,
+            description=flow_description,
         )
 
     @staticmethod
@@ -570,6 +683,14 @@ class FlowParser:
                 flow_data = self._extract_class_flow(node, combined_steps, tree)
                 if flow_data:
                     flows.append(flow_data)
+
+        # Extract @flow decorated factory functions
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if self._has_flow_decorator(node):
+                    flow_data = self._extract_factory_flow(node, combined_steps)
+                    if flow_data:
+                        flows.append(flow_data)
 
         # Extract function-based flow
         function_steps = self._extract_function_steps(tree, local_steps)

@@ -188,12 +188,58 @@ async def create_order(order: OrderData):
 
 See [examples/fastapi/app.py](examples/fastapi/app.py) for a complete CRUD API example with `@step` decorators on endpoints.
 
+### App-factory functions
+
+For FastAPI/Flask app-factory patterns, decorate the factory function itself with `@flow`. FlowDoc treats it as a flow boundary and discovers nested `@step` inner functions:
+
+```python
+from fastapi import FastAPI
+from flowdoc import flow, step
+
+@flow(name="Order API")
+def create_app() -> FastAPI:
+    app = FastAPI()
+
+    @app.post("/orders")
+    @step(name="Create Order Endpoint")
+    async def create_order(payload: dict):
+        return await validate_order(payload)
+
+    @step(name="Validate Order")
+    async def validate_order(payload: dict):
+        return payload
+
+    return app
+```
+
+See [examples/fastapi_factory.py](examples/fastapi_factory.py) for a runnable example.
+
+### Exception-handling branches
+
+`try`/`except`/`finally` blocks are detected and labeled on edges, so business error paths (payment declines, retries, failure notifications) appear in the diagram:
+
+```python
+@step(name="Process Payment")
+def process_payment(self, order):
+    try:
+        return self.charge_card(order)
+    except PaymentError:
+        return self.send_failure_email(order)
+    except NetworkError:
+        return self.retry_later(order)
+    finally:
+        self.log_attempt(order)
+```
+
+Edges are labeled `try`, `except PaymentError`, `except NetworkError`, and `finally`. See [examples/payment_retry.py](examples/payment_retry.py).
+
 ## ⚙️ How It Works
 
 FlowDoc uses Python's `ast` module to statically analyze decorated functions. For each `@step`, it walks the function body looking for:
 
 - **Method calls** (`self.other_method()`) and **function calls** (`other_function()`) to other `@step`-decorated code
 - **Conditional branches** (`if`/`else`) to identify decision points
+- **Exception handling** (`try`/`except`/`finally`) -- except handlers label edges with the exception type (e.g. `except PaymentError`), enabling business error-handling flows
 - **Call count** to determine node shapes: multiple outgoing calls produce a diamond (decision), zero calls produce an ellipse (terminal), and single calls produce a box (regular step)
 
 No code is ever executed during analysis.

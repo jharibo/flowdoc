@@ -236,6 +236,270 @@ class TestFunctionBasedFlowParsing:
         assert validate_to_reject[0].branch == "else"
 
 
+class TestTryExceptParsing:
+    """Tests for parsing try/except/finally branching."""
+
+    def setup_method(self) -> None:
+        clear_flow_registry()
+
+    def test_try_except_labels_handler_with_exception_type(self, tmp_path: Path) -> None:
+        """Try body and except handler each get labeled branch edges."""
+        source = dedent("""
+            from flowdoc import flow, step
+
+            @flow(name="Payment Flow")
+            class PaymentFlow:
+                @step(name="Process")
+                def process(self):
+                    try:
+                        return self.charge()
+                    except PaymentError:
+                        return self.send_failure()
+
+                @step(name="Charge")
+                def charge(self):
+                    pass
+
+                @step(name="Send Failure")
+                def send_failure(self):
+                    pass
+        """)
+
+        test_file = tmp_path / "try_flow.py"
+        test_file.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(test_file)
+
+        assert len(flows) == 1
+        edges = flows[0].edges
+
+        process_to_charge = [e for e in edges if e.from_step == "process" and e.to_step == "charge"]
+        process_to_failure = [
+            e for e in edges if e.from_step == "process" and e.to_step == "send_failure"
+        ]
+
+        assert len(process_to_charge) == 1
+        assert process_to_charge[0].branch == "try"
+
+        assert len(process_to_failure) == 1
+        assert process_to_failure[0].branch == "except PaymentError"
+
+    def test_try_except_bare_handler(self, tmp_path: Path) -> None:
+        """Bare `except:` clause labels edges as "except"."""
+        source = dedent("""
+            from flowdoc import step
+
+            @step(name="Process")
+            def process():
+                try:
+                    charge()
+                except:
+                    log_error()
+
+            @step(name="Charge")
+            def charge():
+                pass
+
+            @step(name="Log Error")
+            def log_error():
+                pass
+        """)
+        test_file = tmp_path / "bare_except.py"
+        test_file.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(test_file)
+        edges = flows[0].edges
+
+        to_log = [e for e in edges if e.to_step == "log_error"]
+        assert len(to_log) == 1
+        assert to_log[0].branch == "except"
+
+    def test_try_except_multiple_handlers(self, tmp_path: Path) -> None:
+        """Each except handler gets its own typed branch label."""
+        source = dedent("""
+            from flowdoc import step
+
+            @step(name="Process")
+            def process():
+                try:
+                    charge()
+                except PaymentError:
+                    send_failure()
+                except NetworkError:
+                    retry()
+
+            @step(name="Charge")
+            def charge():
+                pass
+
+            @step(name="Send Failure")
+            def send_failure():
+                pass
+
+            @step(name="Retry")
+            def retry():
+                pass
+        """)
+        test_file = tmp_path / "multi_handler.py"
+        test_file.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(test_file)
+        edges = flows[0].edges
+
+        to_failure = [e for e in edges if e.to_step == "send_failure"]
+        to_retry = [e for e in edges if e.to_step == "retry"]
+
+        assert len(to_failure) == 1
+        assert to_failure[0].branch == "except PaymentError"
+        assert len(to_retry) == 1
+        assert to_retry[0].branch == "except NetworkError"
+
+    def test_try_except_tuple_of_exceptions(self, tmp_path: Path) -> None:
+        """Tuple of exception types joins names with ' | '."""
+        source = dedent("""
+            from flowdoc import step
+
+            @step(name="Process")
+            def process():
+                try:
+                    charge()
+                except (PaymentError, NetworkError):
+                    handle()
+
+            @step(name="Charge")
+            def charge():
+                pass
+
+            @step(name="Handle")
+            def handle():
+                pass
+        """)
+        test_file = tmp_path / "tuple_except.py"
+        test_file.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(test_file)
+        edges = flows[0].edges
+
+        to_handle = [e for e in edges if e.to_step == "handle"]
+        assert len(to_handle) == 1
+        assert to_handle[0].branch == "except PaymentError | NetworkError"
+
+    def test_try_except_with_finally(self, tmp_path: Path) -> None:
+        """Finally block calls are labeled as "finally"."""
+        source = dedent("""
+            from flowdoc import step
+
+            @step(name="Process")
+            def process():
+                try:
+                    charge()
+                except PaymentError:
+                    send_failure()
+                finally:
+                    log_attempt()
+
+            @step(name="Charge")
+            def charge():
+                pass
+
+            @step(name="Send Failure")
+            def send_failure():
+                pass
+
+            @step(name="Log Attempt")
+            def log_attempt():
+                pass
+        """)
+        test_file = tmp_path / "finally.py"
+        test_file.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(test_file)
+        edges = flows[0].edges
+
+        to_log = [e for e in edges if e.to_step == "log_attempt"]
+        assert len(to_log) == 1
+        assert to_log[0].branch == "finally"
+
+    def test_try_except_dotted_exception_type(self, tmp_path: Path) -> None:
+        """Qualified exception types like mymod.MyError use the attr name."""
+        source = dedent("""
+            from flowdoc import step
+            import errors
+
+            @step(name="Process")
+            def process():
+                try:
+                    charge()
+                except errors.PaymentError:
+                    send_failure()
+
+            @step(name="Charge")
+            def charge():
+                pass
+
+            @step(name="Send Failure")
+            def send_failure():
+                pass
+        """)
+        test_file = tmp_path / "dotted_except.py"
+        test_file.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(test_file)
+        edges = flows[0].edges
+
+        to_failure = [e for e in edges if e.to_step == "send_failure"]
+        assert len(to_failure) == 1
+        assert to_failure[0].branch == "except PaymentError"
+
+    def test_try_inside_if_does_not_crash(self, tmp_path: Path) -> None:
+        """Nested try inside if/else traverses without error; inner labels win."""
+        source = dedent("""
+            from flowdoc import step
+
+            @step(name="Process")
+            def process():
+                if True:
+                    try:
+                        charge()
+                    except:
+                        log_error()
+                else:
+                    skip()
+
+            @step(name="Charge")
+            def charge():
+                pass
+
+            @step(name="Log Error")
+            def log_error():
+                pass
+
+            @step(name="Skip")
+            def skip():
+                pass
+        """)
+        test_file = tmp_path / "nested.py"
+        test_file.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(test_file)
+        edges = flows[0].edges
+
+        to_charge = [e for e in edges if e.to_step == "charge"]
+        to_log = [e for e in edges if e.to_step == "log_error"]
+        to_skip = [e for e in edges if e.to_step == "skip"]
+
+        assert len(to_charge) == 1 and to_charge[0].branch == "try"
+        assert len(to_log) == 1 and to_log[0].branch == "except"
+        assert len(to_skip) == 1 and to_skip[0].branch == "else"
+
+
 class TestAsyncFunctionParsing:
     """Tests for parsing async/await functions."""
 
@@ -354,6 +618,201 @@ class TestMixedFlows:
         assert len(class_flows[0].steps) == 1
 
         assert len(function_flows[0].steps) == 2
+
+
+class TestFactoryFunctionFlows:
+    """Tests for @flow decorated factory functions with nested @step inner functions."""
+
+    def setup_method(self) -> None:
+        clear_flow_registry()
+
+    def test_factory_function_with_nested_steps(self, tmp_path: Path) -> None:
+        """@flow on a factory function discovers nested @step inner functions."""
+        source = dedent("""
+            from flowdoc import flow, step
+
+            @flow(name="Order API")
+            def create_order_api():
+                @step(name="Create Order")
+                def create_order():
+                    return validate_order()
+
+                @step(name="Validate Order")
+                def validate_order():
+                    pass
+
+                return create_order
+        """)
+
+        test_file = tmp_path / "factory.py"
+        test_file.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(test_file)
+
+        assert len(flows) == 1
+        flow = flows[0]
+        assert flow.name == "Order API"
+        assert len(flow.steps) == 2
+        step_names = {s.name for s in flow.steps}
+        assert step_names == {"Create Order", "Validate Order"}
+
+        assert len(flow.edges) == 1
+        assert flow.edges[0].from_step == "create_order"
+        assert flow.edges[0].to_step == "validate_order"
+
+    def test_factory_flow_metadata_extracted(self, tmp_path: Path) -> None:
+        """Factory function @flow(name=..., description=...) args land on FlowData."""
+        source = dedent("""
+            from flowdoc import flow, step
+
+            @flow(name="Order API", description="HTTP order endpoints")
+            def create_api():
+                @step(name="Endpoint")
+                def endpoint():
+                    pass
+        """)
+        test_file = tmp_path / "metadata.py"
+        test_file.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(test_file)
+
+        assert len(flows) == 1
+        assert flows[0].name == "Order API"
+        assert flows[0].description == "HTTP order endpoints"
+
+    def test_empty_factory_flow(self, tmp_path: Path) -> None:
+        """@flow factory with no nested @step still produces a flow with zero steps."""
+        source = dedent("""
+            from flowdoc import flow
+
+            @flow(name="Empty Factory")
+            def create_empty():
+                return None
+        """)
+        test_file = tmp_path / "empty.py"
+        test_file.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(test_file)
+
+        assert len(flows) == 1
+        assert flows[0].name == "Empty Factory"
+        assert flows[0].steps == []
+        assert flows[0].edges == []
+
+    def test_async_factory_function(self, tmp_path: Path) -> None:
+        """@flow on async factory function with async nested steps."""
+        source = dedent("""
+            from flowdoc import flow, step
+
+            @flow(name="Async Factory")
+            async def create_app():
+                @step(name="Start")
+                async def start():
+                    await finish()
+
+                @step(name="Finish")
+                async def finish():
+                    pass
+        """)
+        test_file = tmp_path / "async_factory.py"
+        test_file.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(test_file)
+
+        assert len(flows) == 1
+        flow = flows[0]
+        assert flow.name == "Async Factory"
+        assert len(flow.steps) == 2
+        assert any(e.from_step == "start" and e.to_step == "finish" for e in flow.edges)
+
+    def test_fastapi_style_factory(self, tmp_path: Path) -> None:
+        """Factory with FastAPI-style @app.post + @step stacked decorators."""
+        source = dedent("""
+            from flowdoc import flow, step
+
+            @flow(name="Order API")
+            def create_app():
+                app = FastAPI()
+
+                @app.post("/orders")
+                @step(name="Create Order Endpoint")
+                async def create_order():
+                    await validate()
+
+                @step(name="Validate")
+                async def validate():
+                    pass
+
+                return app
+        """)
+        test_file = tmp_path / "fastapi_factory.py"
+        test_file.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(test_file)
+
+        assert len(flows) == 1
+        flow = flows[0]
+        assert len(flow.steps) == 2
+        step_names = {s.name for s in flow.steps}
+        assert step_names == {"Create Order Endpoint", "Validate"}
+        assert any(e.from_step == "create_order" and e.to_step == "validate" for e in flow.edges)
+
+    def test_factory_plus_top_level_steps(self, tmp_path: Path) -> None:
+        """A factory flow and top-level standalone @step functions coexist as separate flows."""
+        source = dedent("""
+            from flowdoc import flow, step
+
+            @flow(name="Factory Flow")
+            def factory():
+                @step(name="Nested A")
+                def nested_a():
+                    pass
+
+            @step(name="Top Level B")
+            def top_b():
+                pass
+        """)
+        test_file = tmp_path / "coexist.py"
+        test_file.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(test_file)
+
+        assert len(flows) == 2
+        factory_flow = next(f for f in flows if f.name == "Factory Flow")
+        function_flow = next(f for f in flows if f.name != "Factory Flow")
+
+        assert [s.name for s in factory_flow.steps] == ["Nested A"]
+        assert [s.name for s in function_flow.steps] == ["Top Level B"]
+
+    def test_factory_step_calls_top_level_step(self, tmp_path: Path) -> None:
+        """A nested @step inside a factory can call a top-level @step."""
+        source = dedent("""
+            from flowdoc import flow, step
+
+            @step(name="Helper")
+            def helper():
+                pass
+
+            @flow(name="API")
+            def create():
+                @step(name="Endpoint")
+                def endpoint():
+                    helper()
+        """)
+        test_file = tmp_path / "cross_call.py"
+        test_file.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_file(test_file)
+
+        factory_flow = next(f for f in flows if f.name == "API")
+        assert any(e.from_step == "endpoint" and e.to_step == "helper" for e in factory_flow.edges)
 
 
 class TestStepMetadataExtraction:
@@ -679,6 +1138,35 @@ class TestParseDirectory:
         flows = parser.parse_directory(file_path)
         assert len(flows) == 1
         assert flows[0].name == "Test Flow"
+
+    def test_parse_directory_with_factory_flow(self, tmp_path: Path) -> None:
+        """parse_directory discovers @flow factory functions with nested steps."""
+        source = dedent("""
+            from flowdoc import flow, step
+
+            @flow(name="Order API")
+            def create_app():
+                @step(name="Create Order")
+                def create_order():
+                    return validate_order()
+
+                @step(name="Validate Order")
+                def validate_order():
+                    pass
+        """)
+        file_path = tmp_path / "factory_flow.py"
+        file_path.write_text(source)
+
+        parser = FlowParser()
+        flows = parser.parse_directory(file_path)
+
+        assert len(flows) == 1
+        flow = flows[0]
+        assert flow.name == "Order API"
+        assert len(flow.steps) == 2
+        assert any(
+            e.from_step == "create_order" and e.to_step == "validate_order" for e in flow.edges
+        )
 
     def test_unresolved_calls_ignored(self, tmp_path: Path) -> None:
         """Calls to non-step functions don't create edges."""

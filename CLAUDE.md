@@ -20,9 +20,11 @@ FlowDoc uses Python decorators (`@flow` and `@step`) to mark business process st
 FlowDoc works with multiple patterns:
 - **Class-based flows**: `@flow` decorator on class, `@step` on methods
 - **Function-based flows**: `@step` on standalone functions (no `@flow` needed)
+- **Factory-function flows**: `@flow` on a factory function with nested `@step` inner functions (FastAPI/Flask `create_app()` pattern)
 - **Mixed flows**: Classes and functions working together
 - **Web frameworks**: FastAPI, Flask endpoints with `@step` decorators
 - **Async/await**: Full support for async functions
+- **Exception branches**: `try`/`except`/`finally` blocks are detected and labeled with the exception type
 
 ## Development Commands
 
@@ -126,8 +128,14 @@ FlowDoc walks the AST of each `@step` decorated function/method looking for:
 - **Function calls**: `other_function()` → creates edge if `other_function` has `@step`
 - **Async calls**: `await other_function()` → handles async/await patterns
 - **Conditional branches**: Tracks if we're in `if` vs `else` block
+- **Exception handling**: `try`/`except`/`finally` → edges labeled `try`, `except TypeName`, `except A | B`, or `finally`
 - **Multiple calls**: If a step calls 2+ other steps → it's a decision point (diamond shape)
 - **No calls**: Terminal step (ellipse shape)
+
+**Flow boundaries**:
+- `@flow` on a class → methods inside the class are the flow's steps
+- `@flow` on a factory function → nested `@step` inner functions are the flow's steps (FastAPI/Flask app-factory pattern)
+- Standalone top-level `@step` functions (no `@flow`) → form an implicit "Function Flow"
 
 **What works** (99% of use cases):
 - Literal string arguments: `@step(name="Process Order")`

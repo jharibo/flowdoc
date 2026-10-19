@@ -6,7 +6,7 @@ authors = [
     {name = "James Harrison", email = "40500443+jharibo@users.noreply.github.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.10,<3.15"
+requires-python = ">=3.15,<3.16"
 license = {text = "MIT"}
 keywords = ["flowchart", "diagram", "business-process", "documentation", "visualization"]
 classifiers = [

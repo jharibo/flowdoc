@@ -21,6 +21,12 @@
   },
   "packageRules": [
     {
+      "description": "requires-python is the supported-version policy, not a dependency to bump",
+      "matchManagers": ["pep621"],
+      "matchDepTypes": ["requires-python"],
+      "enabled": false
+    },
+    {
       "matchManagers": ["pep621"],
       "matchDepTypes": ["dev-dependencies", "optional-dependencies"],
       "groupName": "dev dependencies"

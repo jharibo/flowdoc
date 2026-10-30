@@ -9,6 +9,7 @@
   "schedule": ["before 6am on monday"],
   "timezone": "Europe/London",
   "labels": ["dependencies"],
+  "reviewers": ["jharibo"],
   "prConcurrentLimit": 5,
   "prHourlyLimit": 2,
   "lockFileMaintenance": {
